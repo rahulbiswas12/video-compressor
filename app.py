@@ -33,7 +33,6 @@ from compressor import (
     check_ffmpeg,
     cleanup_stale_workdirs,
     compress_video,
-    estimate_output_size,
     fmt_duration,
     fmt_size,
     probe_video,
@@ -81,15 +80,6 @@ CSS = """
 .stat .k { font-size: .68rem; text-transform: uppercase; letter-spacing: .07em; opacity: .55; }
 .stat .v { font-size: 1.06rem; font-weight: 700; margin-top: .15rem; }
 
-/* ---------- estimate callout ---------- */
-.estimate {
-  display: flex; align-items: baseline; gap: .6rem; flex-wrap: wrap;
-  margin: 1rem 0 .25rem 0; padding: .9rem 1.1rem; border-radius: 12px;
-  border: 1px dashed rgba(255,75,75,.45); background: rgba(255,75,75,.07);
-}
-.estimate .big { font-size: 1.5rem; font-weight: 800; }
-.estimate .sub { opacity: .7; font-size: .86rem; }
-
 /* ---------- result banner ---------- */
 .result-banner {
   padding: 1.1rem 1.25rem; border-radius: 14px; margin-bottom: .9rem;
@@ -114,10 +104,70 @@ CSS = """
   border: 1.5px dashed rgba(255,255,255,.22); border-radius: 14px;
   background: rgba(255,255,255,.03);
 }
-div.stButton > button { border-radius: 10px; font-weight: 700; }
-div.stDownloadButton > button { border-radius: 10px; font-weight: 700; }
+div.stButton > button { border-radius: 10px; font-weight: 700; min-height: 48px; }
+div.stDownloadButton > button { border-radius: 10px; font-weight: 700; min-height: 48px; }
 footer, #MainMenu { visibility: hidden; }
 .app-footer { margin-top: 2.5rem; text-align: center; font-size: .78rem; opacity: .45; }
+
+/* ---------- mobile responsive ---------- */
+@media (max-width: 768px) {
+  .block-container { padding-top: 1.2rem; padding-bottom: 2rem; padding-left: 1rem; padding-right: 1rem; }
+
+  /* Hero scales down */
+  .hero h1 { font-size: 1.75rem; }
+  .hero p { font-size: .92rem; }
+
+  /* Stats wrap into a 2-column grid on mobile */
+  .stat-row { gap: .4rem; }
+  .stat { flex: 1 1 calc(50% - .4rem); padding: .55rem .7rem; }
+  .stat .v { font-size: .92rem; }
+
+  /* Result banner */
+  .result-banner { padding: .9rem 1rem; }
+  .result-banner .headline { font-size: 1.05rem; }
+  .result-banner .detail { font-size: .82rem; }
+
+  /* Size bars — shrink labels */
+  .bar-row { gap: .4rem; }
+  .bar-row .label { width: 3rem; font-size: .7rem; }
+  .bar-row .val { width: 4.2rem; font-size: .75rem; }
+
+  /* Segmented control text wrapping */
+  [data-testid="stSegmentedControl"] button {
+    font-size: .72rem !important;
+    padding: .5rem .4rem !important;
+    min-height: 44px;
+  }
+
+  /* Streamlit columns stack on mobile — force full width */
+  [data-testid="stHorizontalBlock"] {
+    flex-wrap: wrap !important;
+  }
+  [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+    flex: 1 1 100% !important;
+    min-width: 100% !important;
+  }
+
+  /* Touch-friendly inputs */
+  [data-testid="stFileUploaderDropzone"] { min-height: 120px; border-radius: 12px; }
+  div.stButton > button, div.stDownloadButton > button {
+    min-height: 52px; font-size: .95rem;
+  }
+
+  /* Radio and select spacing */
+  [data-testid="stRadio"] label,
+  [data-testid="stSelectbox"] label {
+    font-size: .88rem;
+  }
+}
+
+/* Extra small screens (< 400px, e.g. older phones) */
+@media (max-width: 400px) {
+  .hero h1 { font-size: 1.5rem; }
+  .stat { flex: 1 1 100%; }
+  .bar-row .label { width: 2.5rem; font-size: .65rem; }
+  .bar-row .val { width: 3.8rem; font-size: .7rem; }
+}
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)
@@ -231,7 +281,9 @@ uploaded = st.file_uploader(
 
 if uploaded is None:
     st.session_state.result = None
-    c1, c2, c3 = st.columns(3, gap="medium")
+    # On mobile these will stack vertically thanks to the CSS media query
+    # that forces stColumn to 100% width on narrow screens.
+    c1, c2, c3 = st.columns(3, gap="small")
     for col, (icon, title, body) in zip(
         (c1, c2, c3),
         [
@@ -307,7 +359,7 @@ with st.container(border=True):
     ) or "Balanced"
     st.caption(QUALITY_PRESETS[quality_label]["blurb"])
 
-    col_a, col_b = st.columns(2, gap="medium")
+    col_a, col_b = st.columns(2, gap="small")
     codec_label = col_a.radio(
         "Codec",
         list(CODEC_PRESETS.keys()),
@@ -329,7 +381,7 @@ with st.container(border=True):
     crf = resolve_crf(codec_label, quality_label)
 
     with st.expander("Advanced"):
-        adv_a, adv_b = st.columns(2, gap="medium")
+        adv_a, adv_b = st.columns(2, gap="small")
         with adv_a:
             crf = st.slider(
                 "CRF (fine tune)",
@@ -360,16 +412,6 @@ with st.container(border=True):
                 st.caption("This file has no audio track.")
 
 audio_mode = AUDIO_MODES[audio_label] if info.has_audio else "none"
-
-estimate = estimate_output_size(info, codec_label, crf, target_height, audio_mode)
-if estimate:
-    saving = (1 - estimate / info.size_bytes) * 100 if info.size_bytes else 0
-    st.markdown(
-        f'<div class="estimate"><span class="big">≈ {fmt_size(estimate)}</span>'
-        f'<span class="sub">estimated output · about {saving:.0f}% smaller · '
-        f"CRF {crf} · actual result depends on the footage</span></div>",
-        unsafe_allow_html=True,
-    )
 
 go = st.button("🚀 Compress video", type="primary", use_container_width=True)
 
