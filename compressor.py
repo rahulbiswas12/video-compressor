@@ -9,7 +9,7 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable
 
 
 class FFmpegNotFoundError(RuntimeError):
@@ -62,7 +62,7 @@ class VideoInfo:
     width: int
     height: int
     codec: str
-    bitrate: Optional[int]
+    bitrate: int | None
     size_bytes: int
     fps: float = 0.0
     has_audio: bool = False
@@ -78,7 +78,7 @@ class CompressionResult:
     input_size_bytes: int
     output_size_bytes: int
     elapsed_sec: float = 0.0
-    settings: Optional[dict] = None
+    settings: dict | None = None
 
     @property
     def reduction_pct(self) -> float:
@@ -94,7 +94,7 @@ def check_ffmpeg() -> None:
     _binary("ffprobe")
 
 
-def _parse_fps(rate: Optional[str]) -> float:
+def _parse_fps(rate: str | None) -> float:
     if not rate:
         return 0.0
     try:
@@ -195,7 +195,7 @@ def _validate_options(codec_label: str, crf: int, speed_preset: str,
 def compress_video(input_path: Path, output_path: Path, codec_label: str, crf: int,
                    speed_preset: str = "medium", target_height: Optional[int] = None,
                    audio_mode: str = "reencode", duration_sec: float = 0,
-                   on_progress: Optional[Callable[[float], None]] = None,
+                   on_progress: Callable[[float], None] | None = None,
                    timeout_sec: Optional[int] = None) -> CompressionResult:
     """Encode with FFmpeg progress protocol, bounded diagnostics and cleanup."""
     input_path, output_path = Path(input_path), Path(output_path)
@@ -260,7 +260,9 @@ def compress_video(input_path: Path, output_path: Path, codec_label: str, crf: i
                 except subprocess.TimeoutExpired as exc:
                     proc.kill()
                     proc.wait()
-                    raise CompressionError(f"Encoding exceeded the {timeout_sec}s timeout.") from exc
+                    raise CompressionError(
+                        f"Encoding exceeded the {timeout_sec}s timeout."
+                    ) from exc
             except BaseException:
                 if proc.poll() is None:
                     proc.terminate()
