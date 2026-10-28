@@ -1,9 +1,15 @@
 import pytest
 
 from compressor import (
-    CODEC_PRESETS, QUALITY_PRESETS, SPEED_PRESETS, VideoInfo,
-    _parse_fps, _validate_options, estimate_output_size, fmt_duration,
-    fmt_size, resolve_crf,
+    CODEC_PRESETS,
+    QUALITY_PRESETS,
+    VideoInfo,
+    _parse_fps,
+    _validate_options,
+    estimate_output_size,
+    fmt_duration,
+    fmt_size,
+    resolve_crf,
 )
 
 
