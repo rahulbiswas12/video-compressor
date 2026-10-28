@@ -9,7 +9,7 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
+from collections.abc import Callable
 
 
 class FFmpegNotFoundError(RuntimeError):
@@ -82,7 +82,9 @@ class CompressionResult:
 
     @property
     def reduction_pct(self) -> float:
-        return (1 - self.output_size_bytes / self.input_size_bytes) * 100 if self.input_size_bytes else 0.0
+        if not self.input_size_bytes:
+            return 0.0
+        return (1 - self.output_size_bytes / self.input_size_bytes) * 100
 
     @property
     def times_smaller(self) -> float:
@@ -151,8 +153,8 @@ def resolve_crf(codec_label: str, quality_label: str) -> int:
 
 
 def estimate_output_size(info: VideoInfo, codec_label: str, crf: int,
-                         target_height: Optional[int] = None,
-                         audio_mode: str = "reencode") -> Optional[int]:
+                         target_height: int | None = None,
+                         audio_mode: str = "reencode") -> int | None:
     """Return a deliberately approximate size estimate in bytes."""
     if not (info.duration_sec > 0 and info.width > 0 and info.height > 0):
         return None
@@ -176,7 +178,7 @@ def estimate_output_size(info: VideoInfo, codec_label: str, crf: int,
 
 
 def _validate_options(codec_label: str, crf: int, speed_preset: str,
-                      target_height: Optional[int], audio_mode: str) -> None:
+                      target_height: int | None, audio_mode: str) -> None:
     if codec_label not in CODEC_PRESETS:
         raise ValueError(f"Unsupported codec: {codec_label}")
     low, high = CODEC_PRESETS[codec_label]["crf_range"]
@@ -193,10 +195,10 @@ def _validate_options(codec_label: str, crf: int, speed_preset: str,
 
 
 def compress_video(input_path: Path, output_path: Path, codec_label: str, crf: int,
-                   speed_preset: str = "medium", target_height: Optional[int] = None,
+                   speed_preset: str = "medium", target_height: int | None = None,
                    audio_mode: str = "reencode", duration_sec: float = 0,
                    on_progress: Callable[[float], None] | None = None,
-                   timeout_sec: Optional[int] = None) -> CompressionResult:
+                   timeout_sec: int | None = None) -> CompressionResult:
     """Encode with FFmpeg progress protocol, bounded diagnostics and cleanup."""
     input_path, output_path = Path(input_path), Path(output_path)
     if not input_path.is_file():
@@ -290,7 +292,7 @@ def compress_video(input_path: Path, output_path: Path, codec_label: str, crf: i
 
 
 def cleanup_stale_workdirs(root: Path, max_age_sec: float = 2 * 3600,
-                           keep: Optional[Path] = None) -> int:
+                           keep: Path | None = None) -> int:
     """Remove only stale app-owned workdirs."""
     removed, now = 0, time.time()
     for path in Path(root).glob(f"{WORK_DIR_PREFIX}*"):
