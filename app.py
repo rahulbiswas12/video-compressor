@@ -468,8 +468,9 @@ if result is not None and result.output_path.exists():
     size_bars(result.input_size_bytes, result.output_size_bytes)
 
     with open(result.output_path, "rb") as f:
-        # Pass an open handle so Streamlit streams the file instead of us
-        # holding the entire video in memory as a bytes object.
+        # Avoid a script rerun when the download is clicked. Rerunning at the
+        # same time as the browser fetches the generated media URL can invalidate
+        # the download and show a "site wasn't available" error.
         st.download_button(
             f"⬇️  Download {result.output_path.name}",
             data=f,
@@ -477,6 +478,8 @@ if result is not None and result.output_path.exists():
             mime="video/mp4",
             type="primary",
             use_container_width=True,
+            key="compressed_video_download",
+            on_click="ignore",
         )
 
     if result.output_size_bytes <= PREVIEW_LIMIT_BYTES:
